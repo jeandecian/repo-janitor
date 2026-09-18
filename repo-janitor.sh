@@ -94,7 +94,17 @@ while read -r gitdir; do
         noremote_count=$((noremote_count + 1))
         tag_folder "$repo_path" "Yellow"
     elif [ -n "$uncommitted" ]; then
-        dirty_repos="${dirty_repos}    $repo_path\n"
+        file_count=$(echo "$uncommitted" | grep -c .)
+        
+        dirty_entry="    $repo_path ($file_count file(s) changed)\n"
+        
+        if [ "$file_count" -lt 5 ]; then
+            while read -r line; do
+                [ -n "$line" ] && dirty_entry="${dirty_entry}        └── $line\n"
+            done <<< "$uncommitted"
+        fi
+
+        dirty_repos="${dirty_repos}${dirty_entry}"
         dirty_count=$((dirty_count + 1))
         tag_folder "$repo_path" "Yellow"
     elif [ -n "$unpushed" ]; then
