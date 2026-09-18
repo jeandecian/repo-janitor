@@ -12,6 +12,24 @@ echo "                 REPO JANITOR CLI                 "
 echo "              Local Workspace Cleanup             "
 echo "=================================================="
 
+ENABLE_TAGGING=false
+POSITIONAL_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -t|--tag)
+            ENABLE_TAGGING=true
+            shift
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+set -- "${POSITIONAL_ARGS[@]}"
+
 WORKSPACE="${1:-.}"
 MAX_DEPTH="${2:-2}"
 
@@ -20,8 +38,34 @@ if [ ! -d "$WORKSPACE" ]; then
     exit 1
 fi
 
+tag_folder() {
+    local folder_path="$1"
+    local color="$2"
+
+    if [ "$ENABLE_TAGGING" = true ] && [[ "$OSTYPE" == "darwin"* ]]; then
+        local abs_path
+        abs_path="$(cd "$folder_path" 2>/dev/null && pwd)" || return
+
+        case "$color" in
+            "Green")  index=6 ;;
+            "Red")    index=2 ;;
+            "Yellow") index=3 ;;
+            *)        index=0 ;;
+        esac
+
+        osascript -e "tell application \"Finder\"
+            set theItem to (POSIX file \"$abs_path\" as alias)
+            set label index of theItem to 0
+            set label index of theItem to $index
+        end tell" &>/dev/null
+    fi
+}
+
 resolved_path="$(cd "$WORKSPACE" && pwd)"
 echo "${BLUE}[INFO]${NC} Scanning (depth: $MAX_DEPTH) $resolved_path"
+if [ "$ENABLE_TAGGING" = true ]; then
+    echo "${BLUE}[INFO]${NC} macOS Finder tagging enabled."
+fi
 echo "${BLUE}[INFO]${NC} Analyzing repositories..."
 echo ""
 
@@ -48,15 +92,19 @@ while read -r gitdir; do
     if [ -z "$has_remote" ]; then
         noremote_repos="${noremote_repos}    $repo_path\n"
         noremote_count=$((noremote_count + 1))
+        tag_folder "$repo_path" "Yellow"
     elif [ -n "$uncommitted" ]; then
         dirty_repos="${dirty_repos}    $repo_path\n"
         dirty_count=$((dirty_count + 1))
+        tag_folder "$repo_path" "Yellow"
     elif [ -n "$unpushed" ]; then
         unpushed_repos="${unpushed_repos}    $repo_path\n"
         unpushed_count=$((unpushed_count + 1))
+        tag_folder "$repo_path" "Red"
     else
         safe_repos="${safe_repos}    $repo_path\n"
         safe_count=$((safe_count + 1))
+        tag_folder "$repo_path" "Green"
     fi
 
 done <<EOF
